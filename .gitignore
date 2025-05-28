@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Custom configuration files
+test/
+.DS_Store
