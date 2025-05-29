@@ -11,4 +11,5 @@ wheels/
 
 # Custom configuration files
 test/
+data/
 .DS_Store
