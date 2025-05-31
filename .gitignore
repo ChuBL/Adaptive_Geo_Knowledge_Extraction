@@ -13,3 +13,5 @@ wheels/
 test/
 data/
 .DS_Store
+.env
+legacy/
