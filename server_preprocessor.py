@@ -11,6 +11,7 @@ from langchain_openai import AzureChatOpenAI
 from langchain_core.output_parsers import PydanticOutputParser
 from dotenv import load_dotenv
 
+# Load environment variables from .env file
 load_dotenv()
 
 mcp = FastMCP("Preprocessor")
@@ -150,6 +151,9 @@ async def generate_entry_versions(
     return raw_output_file, raw_text
 
 async def extract_single_structured_entry(raw_text: str, llm: AzureChatOpenAI, parser: PydanticOutputParser) -> dict:
+    '''
+        Extract a single structured entry from raw text using LLM and return the parsed result.
+    '''
     
     retry_tolerance = 3
     last_exception = None
@@ -180,7 +184,7 @@ async def select_best_entry_version(
     JSON_FILE_PATH: str,
     llm: AzureChatOpenAI,
     input_stem: str,
-    final_dir: Path,
+    output_dir: Path,
     raw_text: str
 ) -> str:
     """
@@ -221,35 +225,34 @@ async def select_best_entry_version(
     if not selected_key:
         raise ValueError(f"LLM failed to select a valid version. LLM response:\n{decision_str}")
 
-    final_dir.mkdir(parents=True, exist_ok=True)
-    final_output_file = final_dir / f"{input_stem}_final.json"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    final_output_file = output_dir / f"{input_stem}_final.json"
     with open(final_output_file, "w", encoding="utf-8") as f:
         json.dump(versions[selected_key], f, indent=2, ensure_ascii=False)
 
     return f"Final version saved to: {final_output_file}"
 
 @mcp.tool()
-async def extract_entries_from_path(PATH: str):
+async def extract_entries_from_path(INPUT_PATH: str):
     """
         Extracts structured geological deposit model entries from a local file or directory.
-
+        
         Input:
         - A string path to either a `.txt` file or a directory containing `.txt` files.
-
+        
         Behavior:
         - For a file: generates multiple structured versions, selects the best one, and saves a JSON file.
         - For a directory: processes all top-level `.txt` files and saves structured outputs for each.
-
+        
         Output:
-        - Saves structured JSON files in 'raw_json' and 'final_json' folders.
-        - Returns a string summary of the number of files processed, success count, and failed cases.
-
+        - Returns a string summary of the number of files processed, success count, failed cases, and the preprocessed output directory.
+        
         This tool is suitable when a user provides OCR-based descriptive documents for automatic structuring.
     """
-    path_obj = Path(PATH)
+    path_obj = Path(INPUT_PATH)
     if not path_obj.exists():
-        raise FileNotFoundError(f"Path not found: {PATH}")
-
+        raise FileNotFoundError(f"Path not found: {INPUT_PATH}")
+    
     llm = AzureChatOpenAI(
         deployment_name=os.getenv("AZURE_DEPLOYMENT_NAME"),
         api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
@@ -258,62 +261,61 @@ async def extract_entries_from_path(PATH: str):
         temperature=0.3,
     )
     parser = PydanticOutputParser(pydantic_object=EntryExtractionResponse)
-
+    
     if path_obj.is_file():
         if path_obj.suffix.lower() != ".txt":
             raise ValueError("Only .txt files are supported for single-file processing.")
-
+        
         raw_json_path, raw_text = await generate_entry_versions(str(path_obj), llm, parser)
-
+        
         await select_best_entry_version(
             JSON_FILE_PATH=str(raw_json_path),
             llm=llm,
             input_stem=path_obj.stem,
-            final_dir=path_obj.parent / "final_json",
+            output_dir=path_obj.parent / "preprocessed_json",
             raw_text=raw_text
         )
-
+        
         return f"[Done] Processed: {path_obj.name}\n" \
-               f"→ Raw JSON: {raw_json_path}\n" \
-               f"→ Final JSON: {path_obj.parent / 'final_json' / f'{path_obj.stem}_final.json'}"
-
+               f"→ Preprocessed JSON: {path_obj.parent / 'preprocessed_json' / f'{path_obj.stem}_preprocessed.json'}"
+    
     elif path_obj.is_dir():
         txt_files = list(path_obj.glob("*.txt"))
         total_count = len(txt_files)
         if total_count == 0:
-            return f"No .txt files found in: {PATH}"
-
+            return f"No .txt files found in: {INPUT_PATH}"
+        
         success_count = 0
         failed_files = []
-
+        
         for txt_file in txt_files:
             # print(f"\n[Processing] {txt_file.name}")
             try:
                 raw_json_path, raw_text = await generate_entry_versions(str(txt_file), llm, parser)
-
+                
                 await select_best_entry_version(
                     JSON_FILE_PATH=str(raw_json_path),
                     llm=llm,
                     input_stem=txt_file.stem,
-                    final_dir=txt_file.parent / "final_json",
+                    output_dir=txt_file.parent / "preprocessed_json",
                     raw_text=raw_text
                 )
                 success_count += 1
             except Exception as e:
                 # print(f"[Failed] {txt_file.name}: {e}")
                 failed_files.append(txt_file.name)
-
-        summary = f"[Done] Processed directory: {PATH}\n" \
+        
+        summary = f"[Done] Processed directory: {INPUT_PATH}\n" \
                   f"→ Total files found: {total_count}\n" \
                   f"→ Successfully processed: {success_count}\n" \
                   f"→ Failed: {len(failed_files)}\n" \
-                  f"→ Final output folder: {path_obj / 'final_json'}"
-
+                  f"→ Preprocessed output folder: {path_obj / 'preprocessed_json'}"
+        
         if failed_files:
             summary += "\n→ Failed files:\n" + "\n".join(f"  - {f}" for f in failed_files)
-
+        
         return summary
-
+    
     else:
         raise ValueError("Provided PATH is neither a file nor a directory.")
 

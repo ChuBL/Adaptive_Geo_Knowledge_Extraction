@@ -12,6 +12,7 @@ dependencies = [
     "langgraph>=0.4.7",
     "langgraph-supervisor>=0.0.26",
     "langsmith>=0.3.42",
+    "openmindat>=0.1.2",
     "pdf2image>=1.17.0",
     "pydantic>=2.11.5",
     "pytesseract>=0.3.13",

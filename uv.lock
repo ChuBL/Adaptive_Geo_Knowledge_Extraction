@@ -541,6 +541,7 @@ dependencies = [
     { name = "langgraph" },
     { name = "langgraph-supervisor" },
     { name = "langsmith" },
+    { name = "openmindat" },
     { name = "pdf2image" },
     { name = "pydantic" },
     { name = "pytesseract" },
@@ -555,6 +556,7 @@ requires-dist = [
     { name = "langgraph", specifier = ">=0.4.7" },
     { name = "langgraph-supervisor", specifier = ">=0.0.26" },
     { name = "langsmith", specifier = ">=0.3.42" },
+    { name = "openmindat", specifier = ">=0.1.2" },
     { name = "pdf2image", specifier = ">=1.17.0" },
     { name = "pydantic", specifier = ">=2.11.5" },
     { name = "pytesseract", specifier = ">=0.3.13" },
@@ -589,6 +591,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/02/2e/58d83848dd1a79cb92ed8e63f6ba901ca282c5f09d04af9423ec26c56fd7/openapi_pydantic-0.5.1.tar.gz", hash = "sha256:ff6835af6bde7a459fb93eb93bb92b8749b754fc6e51b2f1590a19dc3005ee0d", size = 60892, upload-time = "2025-01-08T19:29:27.083Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/12/cf/03675d8bd8ecbf4445504d8071adab19f5f993676795708e36402ab38263/openapi_pydantic-0.5.1-py3-none-any.whl", hash = "sha256:a3a09ef4586f5bd760a8df7f43028b60cafb6d9f61de2acba9574766255ab146", size = 96381, upload-time = "2025-01-08T19:29:25.275Z" },
+]
+
+[[package]]
+name = "openmindat"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/77/30/e609816b09ed8ae43fefab09ce699af8d7f3ae43abd483a04e88fd685321/openmindat-0.1.2.tar.gz", hash = "sha256:1adaeb02cdf3656da3479052f7842733a9691c4029f03c6af69e9232af5857eb", size = 6527113, upload-time = "2025-06-07T00:34:51.89Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/36/2d/99069ea7285fc41ca57f2e7a89c75fc84367d266a16db2f75be647e4e9ae/openmindat-0.1.2-py3-none-any.whl", hash = "sha256:838c73d0f06aadd394881b0ebc56e5e3c04a263bd00f657b9578114535cd13d6", size = 52808, upload-time = "2025-06-07T00:34:49.968Z" },
 ]
 
 [[package]]

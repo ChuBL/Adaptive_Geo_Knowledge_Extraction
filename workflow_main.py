@@ -20,7 +20,6 @@ client = MultiServerMCPClient(
     {
         "math": {
             "command": "uv",
-            # Replace with absolute path to your math_server.py file
             "args": ["run", "server_math.py"],
             "transport": "stdio",
         },
@@ -33,6 +32,16 @@ client = MultiServerMCPClient(
             "command": "uv",
             "args": ["run", "server_preprocessor.py"],
             "transport": "stdio",
+        },
+        "mindat": {
+            "command": "uv",
+            "args": ["run", "server_mindat.py"],
+            "transport": "stdio",
+        },
+        "geosciml": {
+            "command": "uv",
+            "args": ["run", "server_geosciml.py"],
+            "transport": "stdio",
         }
     }
 )
@@ -41,10 +50,15 @@ client = MultiServerMCPClient(
 # async main function
 async def main():
     tools = await client.get_tools()
-
-    math_tools = [t for t in tools if "multiply" in t.name or "add" in t.name or "divide" in t.name]
-    ocr_tools = [t for t in tools if "single_ocr" in t.name or "multi_ocr" in t.name]
-    entry_extraction_tools = [t for t in tools if "extract_entries_from_path" in t.name]
+    
+    def filter_tools(tools, keywords):
+        return [t for t in tools if any(k in t.name for k in keywords)]
+    
+    math_tools = filter_tools(tools, ["multiply", "add", "divide"])
+    ocr_tools = filter_tools(tools, ["single_ocr", "multi_ocr"])
+    entry_extraction_tools = filter_tools(tools, ["extract_entries_from_path"])
+    mindat_tools = filter_tools(tools, ["normalize_mindat_entry"])
+    geosciml_tools = filter_tools(tools, ["match_geosciml_vocabularies"])
 
     math_agent = create_react_agent(
         model=llm,
@@ -66,16 +80,42 @@ async def main():
         name="entry_extraction_agent",
         prompt="You are a entry extracting agent. When you are provided with a file path, you should call the extract_entries tool to analyze the text content.",
     )
+    
+    mindat_agent = create_react_agent(
+        model=llm,
+        tools=mindat_tools,
+        name="mindat_agent",
+        prompt="You are a mindat agent. When you are provided with a file directory, you should call the normalize_mindat_entry to process the geological entity information., The tool will return a directory with mindat-normalized JSON files. Once finished, you should return the directory path with mindat-normalized results.",
+    )
+    
+    geosciml_agent = create_react_agent(
+        model=llm,
+        tools=geosciml_tools,
+        name="geosciml_agent",
+        prompt="You are a geosciml agent. When you are provided with a file directory, you should call the match_geosciml_vocabularies to match the geosciml vocabulary to the geological files. The tool will return another directory with matched results. Once finished, you should return the directory path with matched results.",
+    )
 
 
     workflow = create_supervisor(
-        [math_agent, ocr_agent, entry_extraction_agent],
+        [math_agent, ocr_agent, entry_extraction_agent, mindat_agent, geosciml_agent],
         model=llm,
         prompt=(
-            "You are a team supervisor managing a math agent and a ocr agent. "
-            "For calculations, use math_agent. "
-            "For ocr tasks, use ocr_agent."
-            "For entry extraction tasks, use entry_extraction_agent. "
+            "You are a team supervisor managing a geological data processing pipeline with the following agents:"
+            "AGENTS:"
+            "- math_agent: For mathematical calculations"
+            "- ocr_agent: For OCR text extraction from images/documents → returns file path with OCR results"
+            "- entry_extraction_agent: For processing OCR results into structured data → takes file path/dir, returns structured entries"
+            "- mindat_agent: For mineral/rock entity normalization → takes directory, returns directory with mindat-normalized JSON files  "
+            "- geosciml_agent: For GeosciML vocabulary matching → takes directory with normalized data, returns vocabulary-matched results"
+            "WORKFLOW:"
+            "Standard pipeline: OCR → Entry Extraction → Mindat Normalization → GeosciML Vocabulary Matching"
+            "Each agent can also be called independently for single-step processing."
+            "USAGE:"
+            "- For full pipeline: Start with ocr_agent, then pass results through subsequent agents"
+            "- For partial processing: Call any agent directly with appropriate input (file path or directory)"
+            "- Each agent (except math_agent) builds upon the previous agent's output but can work standalone"
+            "- Do not reject user requests if they provide a file path or directory for processing"
+            
         ),
     )
     
@@ -85,7 +125,11 @@ async def main():
         "messages": [
             {
                 "role": "user",
-                "content": "Please process and extract entries from the dir '/Users/blc/Documents/pyspace/Git_Mindat/mineral-rdf-workflow/data/deposit_seperate/output' and return the result."
+                # "content": "Please extract the mineral from the string 'Mainly gibbsite and mixture of gibbsite and boehmite; gangue minerals hematite, goethite, anatase, locally quartz.'"
+                # "content": "Please help me normalize the mineral and rock entity information from the directory 'data/json_temp0.3_v5_0530/final_json'"
+                # "content": "Please help me calculate the result of 123123*88888 using the math agent",
+                # "content": "Please help me match the geosciml vocabulary from the directory 'test/mini_test/'"
+                "content": "Please help me match the geosciml vocabulary from the directory 'data/mineral_ward'"
             }
         ]
     }, {"recursion_limit": 25})

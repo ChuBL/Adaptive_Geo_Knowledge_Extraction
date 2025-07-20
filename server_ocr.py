@@ -25,12 +25,15 @@ def single_ocr(FILE_PATH: str, STARTING_PAGE: Optional[int] = 0, ENDING_PAGE: Op
     if not os.path.exists(FILE_PATH):
         return f"Error: File not found: {FILE_PATH}"
     
-    # Get the directory and filename of the original PDF
-    pdf_dir = os.path.dirname(os.path.abspath(FILE_PATH))
+    # Create output directory
+    output_dir = "data/ocr_output"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Get the filename of the original PDF
     pdf_name = os.path.splitext(os.path.basename(FILE_PATH))[0]
     
-    # Create output text file path in the same directory as the PDF
-    output_txt_path = os.path.join(pdf_dir, f"{pdf_name}_ocr_output.txt")
+    # Create output text file path in data/ocr_output directory
+    output_txt_path = os.path.join(output_dir, f"{pdf_name}_ocr_output.txt")
     
     # Create a temporary directory to store images
     temp_dir = tempfile.mkdtemp()
@@ -59,7 +62,7 @@ def single_ocr(FILE_PATH: str, STARTING_PAGE: Optional[int] = 0, ENDING_PAGE: Op
         # Ensure proper UTF-8 encoding
         extracted_text_str = extracted_text_str.encode('utf-8', errors='replace').decode('utf-8')
         
-        # Save the extracted text to a file in the same directory as the PDF
+        # Save the extracted text to data/ocr_output directory
         with open(output_txt_path, 'w', encoding='utf-8') as output_file:
             output_file.write(extracted_text_str)
         
@@ -106,7 +109,7 @@ def multi_ocr(DIRECTORY_PATH: str, OVERWRITE: Optional[bool] = False) -> str:
         return f"Error: Path is not a directory: {DIRECTORY_PATH}"
     
     # Create output directory
-    output_dir = os.path.join(DIRECTORY_PATH, "output")
+    output_dir = "data/ocr_output"
     os.makedirs(output_dir, exist_ok=True)
     
     # Find all PDF files in the directory
@@ -157,7 +160,7 @@ def multi_ocr(DIRECTORY_PATH: str, OVERWRITE: Optional[bool] = False) -> str:
             # Ensure proper UTF-8 encoding
             extracted_text_str = extracted_text_str.encode('utf-8', errors='replace').decode('utf-8')
             
-            # Save the extracted text to output directory
+            # Save the extracted text to data/ocr_output directory
             with open(output_txt_path, 'w', encoding='utf-8') as output_file:
                 output_file.write(extracted_text_str)
             
