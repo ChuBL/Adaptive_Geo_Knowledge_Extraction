@@ -1,1 +1,1 @@
-# mineral-rdf-workflow
+# Adaptive_Geo_Knowledge_Extraction
