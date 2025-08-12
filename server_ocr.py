@@ -1,52 +1,84 @@
 import os
 import tempfile
 from typing import Optional
+from pathlib import Path
+from datetime import datetime
 from pdf2image import convert_from_path
 import pytesseract
-# from PIL import Image
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("OCR")
 
-@mcp.tool()
-def single_ocr(FILE_PATH: str, STARTING_PAGE: Optional[int] = 0, ENDING_PAGE: Optional[int] = None) -> str:
+# Define base directory structure
+BASE_OCR_DIR = Path("./data/work_dir")
+
+def setup_pdf_directory_structure(pdf_name: str) -> dict:
     """
-    Extract text from a PDF file using OCR and save results to a text file.
+    Create standardized directory structure for the specified PDF
     
     Args:
-        FILE_PATH (str): Path to the PDF file.
-        STARTING_PAGE (int, optional): The index (0-based) of the first page to process.
-        ENDING_PAGE (int, optional): The index (0-based, exclusive) of the last page to process.
+        pdf_name: PDF filename (without extension) or full path
     
     Returns:
-        str: Success message with file paths and extracted text.
+        Dictionary containing directory paths
     """
+    # Extract just the filename if a full path is provided
+    pdf_name = Path(pdf_name).stem
     
-    if not os.path.exists(FILE_PATH):
-        return f"Error: File not found: {FILE_PATH}"
+    pdf_dir = BASE_OCR_DIR / pdf_name
     
-    # Create output directory
-    output_dir = "data/ocr_output"
-    os.makedirs(output_dir, exist_ok=True)
+    dirs = {
+        'pdf_root': pdf_dir,
+        'raw_ocr': pdf_dir / 'raw_ocr',
+        # 'candidate_extractions': pdf_dir / 'candidate_extractions', 
+        # 'final_output': pdf_dir / 'final_output',
+        'temp': pdf_dir / 'temp'
+    }
     
-    # Get the filename of the original PDF
-    pdf_name = os.path.splitext(os.path.basename(FILE_PATH))[0]
+    # Create all directories
+    for dir_path in dirs.values():
+        dir_path.mkdir(parents=True, exist_ok=True)
     
-    # Create output text file path in data/ocr_output directory
-    output_txt_path = os.path.join(output_dir, f"{pdf_name}_ocr_output.txt")
+    return dirs
+
+def _process_single_pdf(file_path: Path, starting_page: Optional[int] = 0, ending_page: Optional[int] = None, show_preview: bool = True) -> dict:
+    """
+    Internal function to process a single PDF file.
     
-    # Create a temporary directory to store images
+    Args:
+        file_path: Path to the PDF file
+        starting_page: The index (0-based) of the first page to process
+        ending_page: The index (0-based, exclusive) of the last page to process
+        show_preview: Whether to include text preview in result
+    
+    Returns:
+        dict: Processing result with status, message, and optional preview
+    """
+    if not file_path.exists():
+        return {"status": "error", "message": f"File not found: {file_path}"}
+    
+    # Get PDF filename (without extension)
+    pdf_name = file_path.stem
+    
+    # Setup standard directory structure
+    dirs = setup_pdf_directory_structure(pdf_name)
+    
+    # Create output file path - save to raw_ocr directory
+    output_txt_path = dirs['raw_ocr'] / f"{pdf_name}.txt"
+    
+    # Create temporary directory
     temp_dir = tempfile.mkdtemp()
     extracted_text_str = ""
     
     try:
-        pages = convert_from_path(FILE_PATH, dpi=300, fmt="png")
+        pages = convert_from_path(str(file_path), dpi=300, fmt="png")
         custom_config = r'--oem 1 --psm 6 -l eng'
         
+        processed_pages = 0
         for i, page in enumerate(pages):
-            if STARTING_PAGE is not None and i < STARTING_PAGE:
+            if starting_page is not None and i < starting_page:
                 continue
-            if ENDING_PAGE is not None and i >= ENDING_PAGE:
+            if ending_page is not None and i >= ending_page:
                 break
             
             temp_img_path = os.path.join(temp_dir, f"page_{i}.png")
@@ -58,24 +90,32 @@ def single_ocr(FILE_PATH: str, STARTING_PAGE: Optional[int] = 0, ENDING_PAGE: Op
                 text = f"[OCR failed on page {i + 1}: {str(e)}]"
             
             extracted_text_str += f"\n\n--- PAGE {i + 1} ---\n\n{text}"
+            processed_pages += 1
         
         # Ensure proper UTF-8 encoding
         extracted_text_str = extracted_text_str.encode('utf-8', errors='replace').decode('utf-8')
         
-        # Save the extracted text to data/ocr_output directory
+        # Save extracted text to raw_ocr directory
         with open(output_txt_path, 'w', encoding='utf-8') as output_file:
             output_file.write(extracted_text_str)
         
-        # Return success message with file information
-        success_message = f"Successfully performed OCR on file: {os.path.basename(FILE_PATH)}\n"
-        success_message += f"Results saved to: {output_txt_path}\n\n"
-        success_message += "--- EXTRACTED TEXT ---\n"
-        success_message += extracted_text_str
+        result = {
+            "status": "success",
+            "filename": file_path.name,
+            "processed_pages": processed_pages,
+            "output_path": str(output_txt_path)
+        }
         
-        return success_message
+        if show_preview:
+            preview_text = extracted_text_str[:1000]
+            if len(extracted_text_str) > 1000:
+                preview_text += "\n\n[... text truncated for preview ...]"
+            result["preview"] = preview_text
+        
+        return result
         
     except Exception as e:
-        return f"Error during OCR processing: {str(e)}"
+        return {"status": "error", "message": f"Error during OCR processing: {str(e)}"}
     
     finally:
         # Clean up temporary files
@@ -90,62 +130,87 @@ def single_ocr(FILE_PATH: str, STARTING_PAGE: Optional[int] = 0, ENDING_PAGE: Op
             pass
 
 @mcp.tool()
+def single_ocr(FILE_PATH: str, STARTING_PAGE: Optional[int] = 0, ENDING_PAGE: Optional[int] = None) -> str:
+    """
+    Extract text from a PDF file using OCR and save results to standardized directory structure.
+    
+    Args:
+        FILE_PATH (str): Path to the PDF file.
+        STARTING_PAGE (int, optional): The index (0-based) of the first page to process.
+        ENDING_PAGE (int, optional): The index (0-based, exclusive) of the last page to process.
+    
+    Returns:
+        str: Processing summary with counts and output path.
+    """
+    file_path = Path(FILE_PATH)
+    result = _process_single_pdf(file_path, STARTING_PAGE, ENDING_PAGE, show_preview=False)
+    
+    if result["status"] == "error":
+        return f"Processed: 1\nSuccessful: 0\nError: {result['message']}"
+    
+    return f"Processed: 1\nSuccessful: 1\nOutput: {result['output_path']}"
+
+@mcp.tool()
 def multi_ocr(DIRECTORY_PATH: str, OVERWRITE: Optional[bool] = False) -> str:
     """
-    Extract text from all PDF files in a directory using OCR and save results to text files.
+    Extract text from all PDF files in a directory using OCR and save to standardized directory structure.
     
     Args:
         DIRECTORY_PATH (str): Path to the directory containing PDF files.
-        OVERWRITE (bool, optional): Whether to overwrite existing output files. Defaults to False (skip existing files).
+        OVERWRITE (bool, optional): Whether to overwrite existing output files. Defaults to False.
     
     Returns:
-        str: Summary message with processing results for all PDFs.
+        str: Processing summary with counts and raw ocr output directory.
     """
     
-    if not os.path.exists(DIRECTORY_PATH):
-        return f"Error: Directory not found: {DIRECTORY_PATH}"
+    directory_path = Path(DIRECTORY_PATH)
+    if not directory_path.exists():
+        return f"Processed: 0\nSuccessful: 0\nError: Directory not found: {DIRECTORY_PATH}"
     
-    if not os.path.isdir(DIRECTORY_PATH):
-        return f"Error: Path is not a directory: {DIRECTORY_PATH}"
-    
-    # Create output directory
-    output_dir = "data/ocr_output"
-    os.makedirs(output_dir, exist_ok=True)
+    if not directory_path.is_dir():
+        return f"Processed: 0\nSuccessful: 0\nError: Path is not a directory: {DIRECTORY_PATH}"
     
     # Find all PDF files in the directory
-    pdf_files = []
-    for filename in os.listdir(DIRECTORY_PATH):
-        if filename.lower().endswith('.pdf'):
-            pdf_files.append(filename)
+    pdf_files = list(directory_path.glob("*.pdf"))
+    pdf_files.extend(directory_path.glob("*.PDF"))  # Handle uppercase extensions
     
     if not pdf_files:
-        return f"No PDF files found in directory: {DIRECTORY_PATH}"
+        return f"Processed: 0\nSuccessful: 0\nError: No PDF files found in directory: {DIRECTORY_PATH}"
     
-    # Process each PDF file
-    results = []
+    # Create timestamp-based project name for the book
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    project_name = f"source_{timestamp}"
+    
+    # Setup directory structure for the entire book project
+    dirs = setup_pdf_directory_structure(project_name)
+    
+    # Process each PDF file (chapter)
     successful_count = 0
-    failed_count = 0
     skipped_count = 0
     
-    for pdf_filename in pdf_files:
-        pdf_path = os.path.join(DIRECTORY_PATH, pdf_filename)
-        pdf_name = os.path.splitext(pdf_filename)[0]
-        output_txt_path = os.path.join(output_dir, f"{pdf_name}_ocr_output.txt")
+    for pdf_file in pdf_files:
+        # Create chapter-specific output file name
+        chapter_name = pdf_file.stem
+        output_txt_path = dirs['raw_ocr'] / f"{chapter_name}.txt"
         
-        # Check if output file already exists and handle according to OVERWRITE flag
-        if os.path.exists(output_txt_path) and not OVERWRITE:
-            results.append(f"⏭ {pdf_filename} -> Skipped (output file already exists)")
+        if output_txt_path.exists() and not OVERWRITE:
             skipped_count += 1
             continue
         
-        # Create a temporary directory to store images for this PDF
+        # Process the PDF using the internal function, but save to the shared project directory
+        file_path = pdf_file
+        if not file_path.exists():
+            continue
+        
+        # Create temporary directory
         temp_dir = tempfile.mkdtemp()
         extracted_text_str = ""
         
         try:
-            pages = convert_from_path(pdf_path, dpi=300, fmt="png")
+            pages = convert_from_path(str(file_path), dpi=300, fmt="png")
             custom_config = r'--oem 1 --psm 6 -l eng'
             
+            processed_pages = 0
             for i, page in enumerate(pages):
                 temp_img_path = os.path.join(temp_dir, f"page_{i}.png")
                 page.save(temp_img_path)
@@ -156,24 +221,22 @@ def multi_ocr(DIRECTORY_PATH: str, OVERWRITE: Optional[bool] = False) -> str:
                     text = f"[OCR failed on page {i + 1}: {str(e)}]"
                 
                 extracted_text_str += f"\n\n--- PAGE {i + 1} ---\n\n{text}"
+                processed_pages += 1
             
             # Ensure proper UTF-8 encoding
             extracted_text_str = extracted_text_str.encode('utf-8', errors='replace').decode('utf-8')
             
-            # Save the extracted text to data/ocr_output directory
+            # Save extracted text to shared raw_ocr directory
             with open(output_txt_path, 'w', encoding='utf-8') as output_file:
                 output_file.write(extracted_text_str)
             
-            overwrite_status = " (overwritten)" if os.path.exists(output_txt_path) and OVERWRITE else ""
-            results.append(f"✓ {pdf_filename} -> {pdf_name}_ocr_output.txt{overwrite_status}")
             successful_count += 1
             
         except Exception as e:
-            results.append(f"✗ {pdf_filename} -> Error: {str(e)}")
-            failed_count += 1
+            pass  # Skip failed files
         
         finally:
-            # Clean up temporary files for this PDF
+            # Clean up temporary files
             for fname in os.listdir(temp_dir):
                 try:
                     os.remove(os.path.join(temp_dir, fname))
@@ -185,19 +248,12 @@ def multi_ocr(DIRECTORY_PATH: str, OVERWRITE: Optional[bool] = False) -> str:
                 pass
     
     # Create summary message
-    summary = f"OCR Processing Complete!\n"
-    summary += f"Directory processed: {DIRECTORY_PATH}\n"
-    summary += f"Output directory: {output_dir}\n"
-    summary += f"Total PDFs found: {len(pdf_files)}\n"
-    summary += f"Successfully processed: {successful_count}\n"
-    summary += f"Skipped (already exists): {skipped_count}\n"
-    summary += f"Failed: {failed_count}\n"
-    summary += f"Overwrite mode: {'ON' if OVERWRITE else 'OFF'}\n\n"
-    summary += "Processing Results:\n"
-    summary += "\n".join(results)
+    total_processed = successful_count + skipped_count
+    summary = f"Processed: {total_processed}\nSuccessful: {successful_count}\nOutput: {dirs['raw_ocr']}"
     
     return summary
 
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
+        

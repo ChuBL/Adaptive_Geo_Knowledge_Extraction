@@ -18,3 +18,5 @@ legacy/
 mindat_data/
 *.ttl
 .apikey.yaml
+evaluation/
+evaluations/

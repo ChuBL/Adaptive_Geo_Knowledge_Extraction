@@ -56,7 +56,7 @@ async def main():
     
     math_tools = filter_tools(tools, ["multiply", "add", "divide"])
     ocr_tools = filter_tools(tools, ["single_ocr", "multi_ocr"])
-    entry_extraction_tools = filter_tools(tools, ["extract_entries_from_path"])
+    preprocessing_tools = filter_tools(tools, ["extract_entries_from_path"])
     mindat_tools = filter_tools(tools, ["normalize_mindat_entry"])
     geosciml_tools = filter_tools(tools, ["match_geosciml_vocabularies"])
 
@@ -74,18 +74,18 @@ async def main():
         prompt="You are an OCR agent. When you are provided with a file path or directory, you should call the ocr_tools.",
     )
     
-    entry_extraction_agent = create_react_agent(
+    preprocessing_agent = create_react_agent(
         model=llm,
-        tools=entry_extraction_tools,
-        name="entry_extraction_agent",
-        prompt="You are a entry extracting agent. When you are provided with a file path, you should call the extract_entries tool to analyze the text content.",
+        tools=preprocessing_tools,
+        name="preprocessing_agent",
+        prompt="You are a preprocessing agent only for extracting entries from the input directory. When you are provided with a file path, you should call the extract_entries_from_path tool to analyze the text content. For each calling, you should call the tool only once and return the result to the supervisor agent.",
     )
     
     mindat_agent = create_react_agent(
         model=llm,
         tools=mindat_tools,
         name="mindat_agent",
-        prompt="You are a mindat agent. When you are provided with a file directory, you should call the normalize_mindat_entry to process the geological entity information., The tool will return a directory with mindat-normalized JSON files. Once finished, you should return the directory path with mindat-normalized results.",
+        prompt="You are a mindat agent. When you are provided with a file directory, you should call the normalize_mindat_entry to process the geological entity information. The tool will return a directory with mindat-normalized JSON files. Once finished, you should return the directory path with mindat-normalized results.",
     )
     
     geosciml_agent = create_react_agent(
@@ -97,14 +97,14 @@ async def main():
 
 
     workflow = create_supervisor(
-        [math_agent, ocr_agent, entry_extraction_agent, mindat_agent, geosciml_agent],
+        [math_agent, ocr_agent, preprocessing_agent, mindat_agent, geosciml_agent],
         model=llm,
         prompt=(
             "You are a team supervisor managing a geological data processing pipeline with the following agents:"
             "AGENTS:"
             "- math_agent: For mathematical calculations"
             "- ocr_agent: For OCR text extraction from images/documents → returns file path with OCR results"
-            "- entry_extraction_agent: For processing OCR results into structured data → takes file path/dir, returns structured entries"
+            "- preprocessing_agent: For processing OCR text results into structured data → takes file path/dir, returns output dir with structured entries"
             "- mindat_agent: For mineral/rock entity normalization → takes directory, returns directory with mindat-normalized JSON files  "
             "- geosciml_agent: For GeosciML vocabulary matching → takes directory with normalized data, returns vocabulary-matched results"
             "WORKFLOW:"
@@ -125,11 +125,10 @@ async def main():
         "messages": [
             {
                 "role": "user",
-                # "content": "Please extract the mineral from the string 'Mainly gibbsite and mixture of gibbsite and boehmite; gangue minerals hematite, goethite, anatase, locally quartz.'"
-                # "content": "Please help me normalize the mineral and rock entity information from the directory 'data/json_temp0.3_v5_0530/final_json'"
                 # "content": "Please help me calculate the result of 123123*88888 using the math agent",
-                # "content": "Please help me match the geosciml vocabulary from the directory 'test/mini_test/'"
-                "content": "Please help me match the geosciml vocabulary from the directory 'data/mineral_ward'"
+                # "content": "Please help me match the geosciml vocabulary from the directory 'test/data'"
+                # "content": "Please help me normalize the processed entries in '...' using the mindat agent. Then, match the geosciml vocabulary using the geosciml agent."
+                "content": "Please help me extract the text from the PDF files in 'data/source' using OCR agent, then process the text entries using the preprocessing agent, and normalize the mineral and rock entities using the mindat agent. Finally, match the geosciml vocabulary using the geosciml agent.",
             }
         ]
     }, {"recursion_limit": 25})
@@ -143,3 +142,4 @@ async def main():
 # execute the main function
 if __name__ == "__main__":
     asyncio.run(main())
+    

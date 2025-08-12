@@ -61,7 +61,7 @@ def download_geosciml_vocabularies(output_dir: str = "./data/vocabularies") -> d
         'Particle Type': 'particletype',
         'Planar Polarity Code': 'planarpolaritycode',
         'Proportion Term': 'proportionterm',
-        'Simple Lithology': 'lithology',
+        # 'Simple Lithology': 'lithology',
         'Stratigraphic Rank': 'stratigraphicrank',
         'Value Qualifier': 'valuequalifier',
         'Vocabulary Relation': 'vocabularyrelation'
@@ -74,6 +74,7 @@ def download_geosciml_vocabularies(output_dir: str = "./data/vocabularies") -> d
     earthresourceml_base = "http://resource.geosciml.org/classifier/cgi/"
     earthresourceml_vocab_mappings = {
         'Commodity Code': 'commodity-code',
+        # 'Deposit Model': 'deposit-model',
         'Earth Resource Expression': 'earth-resource-expression',
         'Earth Resource Form': 'earth-resource-form',
         'Earth Resource Material Role': 'earth-resource-material-role',
