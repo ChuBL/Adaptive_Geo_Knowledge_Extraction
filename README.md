@@ -1,1 +1,3 @@
 # Adaptive_Geo_Knowledge_Extraction
+
+Starting to work on refatcoring...
