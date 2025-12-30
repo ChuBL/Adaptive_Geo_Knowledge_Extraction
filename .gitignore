@@ -20,3 +20,6 @@ mindat_data/
 .apikey.yaml
 evaluation/
 evaluations/
+doc/
+*bak*
+
