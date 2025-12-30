@@ -1,7 +1,7 @@
 # Adaptive_Geo_Knowledge_Extraction
 
 Starting to work on refatcoring...
-tmux test
+tmux test2
 
 ## Overview
 An automated multi-agent system that leverages Large Language Models (LLMs) to extract and standardize knowledge from unstructured Earth Science documents into structured knowledge bases, with minimal human intervention.
