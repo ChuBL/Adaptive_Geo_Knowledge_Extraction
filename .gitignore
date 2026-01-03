@@ -10,7 +10,7 @@ wheels/
 .venv
 
 # Custom configuration files
-test/
+*test*
 data/
 .DS_Store
 .env
